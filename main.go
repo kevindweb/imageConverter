@@ -47,12 +47,6 @@ func writeFile(fileName string, background *image.RGBA) {
 type componentPixel struct {
 	pixel     color.Color
 	component int
-	visited   bool
-}
-
-func (c *componentPixel) visit(component int) {
-	c.component = component
-	c.visited = true
 }
 
 // findBackgroundColor scans the image for the most popular colors
@@ -99,6 +93,8 @@ func colorDiff(c1 color.Color, background [3]uint32) float64 {
 		square(background[1]-g1) + square(background[2]-b1))
 }
 
+const MaxInt = int(^uint(0) >> 1)
+
 // dfs iteratively adds neighbors to the component list to find the entire
 // connected icon - can't use recursive, causes stackoverflow with num pixels
 func dfs(col int, row int, width int, height int, matrix []componentPixel,
@@ -109,6 +105,7 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 
 	count := 0
 	neighbors := [3]int{-1, 0, 1}
+	neighborLength := len(neighbors)
 
 	firstPixel := true
 	var pixelSpace [4]int
@@ -123,19 +120,20 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 		}
 
 		inx := row*width + col
-		if matrix[inx].visited {
+		if matrix[inx].component != 0 {
+			// we've visited this pixel
 			continue
 		}
 
 		if colorDiff(matrix[inx].pixel, background) < 15000 {
 			// this is the background, don't want this component
+			matrix[inx].component = -1
 			continue
 		}
 
 		if firstPixel {
 			// initialize the dimensions only when necessary
 			firstPixel = false
-			const MaxInt = int(^uint(0) >> 1)
 			pixelSpace = [4]int{MaxInt, 0, MaxInt, 0}
 		}
 
@@ -151,11 +149,11 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 			pixelSpace[3] = col
 		}
 
-		matrix[inx].visit(component)
+		matrix[inx].component = component
 
-		for i := 0; i < len(neighbors); i++ {
+		for i := 0; i < neighborLength; i++ {
 			neighborColumn := col + neighbors[i]
-			for j := 0; j < len(neighbors); j++ {
+			for j := 0; j < neighborLength; j++ {
 				stack = append(stack, [2]int{neighborColumn, row + neighbors[j]})
 			}
 		}
@@ -178,16 +176,14 @@ func findIcon(width int, height int, matrix []componentPixel,
 		 * trim the image into only the icon's dimensions to save space
 	*/
 
-	components := 0
-	maxComponent := 0
+	components := 1
+	maxComponent := 1
 	maxComponentPixelCount := 0
-	var componentPixelCount int
 	var componentDimensions [][4]int
-	var dimensions [4]int
 
 	for j := 0; j < height; j++ {
 		for i := 0; i < width; i++ {
-			componentPixelCount, dimensions = dfs(i, j, width, height, matrix,
+			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
 				background, components)
 			if componentPixelCount > 0 {
 				if componentPixelCount > maxComponentPixelCount {
@@ -201,7 +197,7 @@ func findIcon(width int, height int, matrix []componentPixel,
 		}
 	}
 
-	return matrix, maxComponent, componentDimensions[maxComponent]
+	return matrix, maxComponent, componentDimensions[maxComponent-1]
 }
 
 // runIcon is the main entrypoint into the algorithm
@@ -233,7 +229,7 @@ func runIcon(img image.Image) *image.RGBA {
 			// original matrix index is (j+topPixel)*backgroundWidth+(i+leftPixel)
 			// accessing 2d matrix as 1d array https://stackoverflow.com/a/2151141
 			pixel := matrix[row+i]
-			if pixel.visited && pixel.component == iconComponent {
+			if pixel.component == iconComponent {
 				background.Set(i, j, pixel.pixel)
 			} else {
 				background.Set(i, j, transparentColor)
@@ -259,8 +255,6 @@ func main() {
 	}
 
 	img := readFile(fileName)
-
 	background := runIcon(img)
-
 	writeFile(fileName, background)
 }

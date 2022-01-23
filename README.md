@@ -22,14 +22,15 @@ And turn it into an icon with a transparent background like this
         * The output will go into "icons"
 
 ## Key algorithms
-* Find background color - n^2 image lookup with hash table for the color:pixelCount
+* Find background color - O(n) image lookup with hash table for the color:pixelCount
     * Find the most "popular" color (set as the background color)
-* Find connected components - n^2 dfs to find separate connected components/potential icons
+* Find connected components - O(n) dfs to find separate connected components/potential icons
     * We loop through pixels and group them by neighbors, making sure to `visit` them only once
     * This process also "fits" the image by finding the component's dimensions
-* Build transparent image - n^2 only add color of pixels if they are in the correct "component"
+* Build transparent image - O(n) only add color of pixels if they are in the correct "component"
+    * n is smaller here typically because we only process the icon dimensions (not the whole original)
 
-(where n^2 is the total number of pixels - width*height)
+(where n is the total number of pixels - width*height)
 
 ## Key points and features
 * The algorithm performs especially well in jpegs that "should" be icons with semi-uniform background colors
