@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -9,6 +10,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"time"
 )
 
 func check(e error) {
@@ -21,6 +23,7 @@ func init() {
 	image.RegisterFormat("jpeg", "jpeg", jpeg.Decode, jpeg.DecodeConfig)
 }
 
+// readFile takes the input string and reads the image from ./images into memory
 func readFile(fileToConvert string) image.Image {
 	file, err := os.Open("images/" + fileToConvert + ".jpeg")
 	check(err)
@@ -31,6 +34,7 @@ func readFile(fileToConvert string) image.Image {
 	return img
 }
 
+// writeFile ouputs an image.RGBA to png file on disk in ./icons
 func writeFile(fileName string, background *image.RGBA) {
 	buf := new(bytes.Buffer)
 	err := png.Encode(buf, background)
@@ -40,16 +44,33 @@ func writeFile(fileName string, background *image.RGBA) {
 	check(err)
 }
 
-func findBackgroundColor(img image.Image, width int, height int) [3]uint32 {
-	colorCount := make(map[color.Color]int)
-	popularColor := img.At(0, 0)
-	colorCount[popularColor] = 1
-	maxPixelCount := 1
+type componentPixel struct {
+	pixel     color.Color
+	component int
+	visited   bool
+}
 
-	for x := 1; x < width; x++ {
-		for y := 0; y < height; y++ {
+func (c *componentPixel) visit(component int) {
+	c.component = component
+	c.visited = true
+}
+
+// findBackgroundColor scans the image for the most popular colors
+// using a hashmap it tracks the highest and returns that as the background
+// alongside a 1d representation of the pixels for further computation
+func findBackgroundColor(img image.Image, width int, height int) ([3]uint32, []componentPixel) {
+	matrix := make([]componentPixel, width*height)
+	colorCount := make(map[color.Color]int)
+
+	var popularColor color.Color
+	maxPixelCount := 0
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
 			pixel := img.At(x, y)
 			pixelCount := 1
+			matrix[y*width+x].pixel = pixel
+
 			if count, ok := colorCount[pixel]; ok {
 				pixelCount += count
 			}
@@ -62,33 +83,26 @@ func findBackgroundColor(img image.Image, width int, height int) [3]uint32 {
 	}
 
 	red, green, blue, _ := popularColor.RGBA()
-	return [3]uint32{red, green, blue}
+	return [3]uint32{red, green, blue}, matrix
 }
 
 func square(num uint32) float64 {
 	return float64(num * num)
 }
 
+// colorDiff compares two RGB colors and returns the result
+// the Euclidean distance algorithm is based on this article
+// https://en.wikipedia.org/wiki/Color_difference
 func colorDiff(c1 color.Color, background [3]uint32) float64 {
 	r1, g1, b1, _ := c1.RGBA()
 	return math.Sqrt(square(background[0]-r1) +
 		square(background[1]-g1) + square(background[2]-b1))
 }
 
-type componentPixel struct {
-	pixel     color.Color
-	component int
-	visited   bool
-}
-
-func (c *componentPixel) visit(pixel color.Color, component int) {
-	c.pixel = pixel
-	c.component = component
-	c.visited = true
-}
-
+// dfs iteratively adds neighbors to the component list to find the entire
+// connected icon - can't use recursive, causes stackoverflow with num pixels
 func dfs(col int, row int, width int, height int, matrix []componentPixel,
-	img image.Image, background [3]uint32, component int) (int, [4]int) {
+	background [3]uint32, component int) (int, [4]int) {
 	var stack [][2]int
 	stack = append(stack, [2]int{col, row})
 	var col_row [2]int
@@ -113,8 +127,7 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 			continue
 		}
 
-		pixel := img.At(col, row)
-		if colorDiff(pixel, background) < 15000 {
+		if colorDiff(matrix[inx].pixel, background) < 15000 {
 			// this is the background, don't want this component
 			continue
 		}
@@ -138,7 +151,7 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 			pixelSpace[3] = col
 		}
 
-		matrix[inx].visit(pixel, component)
+		matrix[inx].visit(component)
 
 		for i := 0; i < len(neighbors); i++ {
 			neighborColumn := col + neighbors[i]
@@ -153,8 +166,10 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 	return count, pixelSpace
 }
 
-func findIcon(width int, height int,
-	background [3]uint32, img image.Image) ([]componentPixel, int, [4]int) {
+// findIcon takes an image and searches for the connected components
+// it then returns the component (and dimensions) with maximum pixel count
+func findIcon(width int, height int, matrix []componentPixel,
+	background [3]uint32) ([]componentPixel, int, [4]int) {
 	/*
 		 * find connected components
 		 	* connected components are surrounded by "background" color
@@ -162,19 +177,17 @@ func findIcon(width int, height int,
 		 * find connected component with highest numPixels
 		 * trim the image into only the icon's dimensions to save space
 	*/
-	matrix := make([]componentPixel, width*height)
 
 	components := 0
 	maxComponent := 0
 	maxComponentPixelCount := 0
 	var componentPixelCount int
-
 	var componentDimensions [][4]int
 	var dimensions [4]int
 
 	for j := 0; j < height; j++ {
 		for i := 0; i < width; i++ {
-			componentPixelCount, dimensions = dfs(i, j, width, height, matrix, img,
+			componentPixelCount, dimensions = dfs(i, j, width, height, matrix,
 				background, components)
 			if componentPixelCount > 0 {
 				if componentPixelCount > maxComponentPixelCount {
@@ -191,14 +204,17 @@ func findIcon(width int, height int,
 	return matrix, maxComponent, componentDimensions[maxComponent]
 }
 
+// runIcon is the main entrypoint into the algorithm
+// when given an image, it finds the background, components
+// and returns the transparent png result
 func runIcon(img image.Image) *image.RGBA {
 	backgroundWidth := img.Bounds().Dx()
 	backgroundHeight := img.Bounds().Dy()
 	transparentColor := image.Transparent
 
-	backgroundColor := findBackgroundColor(img, backgroundWidth, backgroundHeight)
+	backgroundColor, pixelMatrix := findBackgroundColor(img, backgroundWidth, backgroundHeight)
 	matrix, iconComponent, iconDimensions := findIcon(backgroundWidth,
-		backgroundHeight, backgroundColor, img)
+		backgroundHeight, pixelMatrix, backgroundColor)
 
 	topPixel := iconDimensions[0]
 	bottomPixel := iconDimensions[1]
@@ -217,10 +233,9 @@ func runIcon(img image.Image) *image.RGBA {
 			// original matrix index is (j+topPixel)*backgroundWidth+(i+leftPixel)
 			// accessing 2d matrix as 1d array https://stackoverflow.com/a/2151141
 			pixel := matrix[row+i]
-			if pixel.pixel != nil && pixel.component == iconComponent {
+			if pixel.visited && pixel.component == iconComponent {
 				background.Set(i, j, pixel.pixel)
 			} else {
-				// just make it transparent
 				background.Set(i, j, transparentColor)
 			}
 		}
@@ -229,7 +244,15 @@ func runIcon(img image.Image) *image.RGBA {
 	return background
 }
 
+func elapsed(what string) func() {
+	start := time.Now()
+	return func() {
+		fmt.Printf("%s took %v\n", what, time.Since(start))
+	}
+}
+
 func main() {
+	defer elapsed("imageConverter")()
 	fileName := "clownfish"
 	if len(os.Args) >= 2 {
 		fileName = os.Args[1]

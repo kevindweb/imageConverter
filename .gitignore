@@ -1,3 +1,10 @@
 .vscode
+
+# build and test results
 *.prof
-main*
+imageconverter
+*.test
+*.out
+
+# mac os files
+*.icloud
