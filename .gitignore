@@ -2,7 +2,7 @@
 
 # build and test results
 *.prof
-imageconverter
+src/src
 *.test
 *.out
 

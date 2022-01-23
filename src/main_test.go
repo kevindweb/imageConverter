@@ -1,4 +1,4 @@
-// image_test.go
+// main_test.go
 package main
 
 import (
@@ -7,7 +7,7 @@ import (
 
 func TestGetVal(t *testing.T) {
 	img := readFile("clownfish")
-	for i := 0; i < 40; i++ {
+	for i := 0; i < 1; i++ {
 		runIcon(img)
 	}
 }
