@@ -18,6 +18,7 @@ func main() {
 	}
 
 	img := readFile(fileName)
-	background := runIcon(img)
+	// background := runIcon(img)
+	background := runIconOptimal(img)
 	writeFile(fileName, background)
 }

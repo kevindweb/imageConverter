@@ -3,13 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
-	"math"
 )
-
-type componentPixel struct {
-	pixel     color.Color
-	component int
-}
 
 // findBackgroundColor scans the image for the most popular colors
 // using a hashmap it tracks the highest and returns that as the background
@@ -41,21 +35,6 @@ func findBackgroundColor(img image.Image, width int, height int) ([3]uint32, []c
 	red, green, blue, _ := popularColor.RGBA()
 	return [3]uint32{red, green, blue}, matrix
 }
-
-func square(num uint32) float64 {
-	return float64(num * num)
-}
-
-// colorDiff compares two RGB colors and returns the result
-// the Euclidean distance algorithm is based on this article
-// https://en.wikipedia.org/wiki/Color_difference
-func colorDiff(c1 color.Color, background [3]uint32) float64 {
-	r1, g1, b1, _ := c1.RGBA()
-	return math.Sqrt(square(background[0]-r1) +
-		square(background[1]-g1) + square(background[2]-b1))
-}
-
-const MaxInt = int(^uint(0) >> 1)
 
 // dfs iteratively adds neighbors to the component list to find the entire
 // connected icon - can't use recursive, causes stackoverflow with num pixels
@@ -142,7 +121,7 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 // findIcon takes an image and searches for the connected components
 // it then returns the component (and dimensions) with maximum pixel count
 func findIcon(width int, height int, matrix []componentPixel,
-	background [3]uint32) (int, [4]int) {
+	background [3]uint32) (map[int]bool, [4]int) {
 	/*
 		 * find connected components
 		 	* connected components are surrounded by "background" color
@@ -172,11 +151,11 @@ func findIcon(width int, height int, matrix []componentPixel,
 		}
 	}
 
-	return maxComponent, componentDimensions[maxComponent-1]
+	return map[int]bool{maxComponent: true}, componentDimensions[maxComponent-1]
 }
 
 func buildTransparentImage(matrix []componentPixel, iconDimensions [4]int,
-	iconComponent int, backgroundWidth int) *image.RGBA {
+	iconComponents map[int]bool, backgroundWidth int) *image.RGBA {
 
 	topPixel := iconDimensions[0]
 	bottomPixel := iconDimensions[1]
@@ -187,16 +166,13 @@ func buildTransparentImage(matrix []componentPixel, iconDimensions [4]int,
 	iconWidth := rightPixel - leftPixel
 	iconHeight := bottomPixel - topPixel
 	background := image.NewRGBA(image.Rect(0, 0, iconWidth, iconHeight))
-	matrixInx := topPixel*backgroundWidth + leftPixel
-	var row int
 
 	for j := 0; j < iconHeight; j++ {
-		row = j*backgroundWidth + matrixInx
 		for i := 0; i < iconWidth; i++ {
-			// original matrix index is (j+topPixel)*backgroundWidth+(i+leftPixel)
 			// accessing 2d matrix as 1d array https://stackoverflow.com/a/2151141
-			pixel := matrix[row+i]
-			if pixel.component == iconComponent {
+			pixel := matrix[(j+topPixel)*backgroundWidth+(i+leftPixel)]
+			if _, ok := iconComponents[pixel.component]; ok {
+				// if this pixel is in any of the "icon" components, set the pixel
 				background.Set(i, j, pixel.pixel)
 			} else {
 				background.Set(i, j, transparentColor)
@@ -215,8 +191,8 @@ func runIcon(img image.Image) *image.RGBA {
 	backgroundHeight := img.Bounds().Dy()
 
 	backgroundColor, pixelMatrix := findBackgroundColor(img, backgroundWidth, backgroundHeight)
-	iconComponent, iconDimensions := findIcon(backgroundWidth,
+	iconComponentMap, iconDimensions := findIcon(backgroundWidth,
 		backgroundHeight, pixelMatrix, backgroundColor)
 
-	return buildTransparentImage(pixelMatrix, iconDimensions, iconComponent, backgroundWidth)
+	return buildTransparentImage(pixelMatrix, iconDimensions, iconComponentMap, backgroundWidth)
 }
