@@ -25,12 +25,18 @@ It's called multithreaded connected component labeling
 import (
 	"image"
 	"math"
+	"sync/atomic"
 )
+
+type chunkArea struct {
+	dimensions [4]int
+	pixels     int
+}
 
 // dfs iteratively adds neighbors to the component list to find the entire
 // connected icon - can't use recursive, causes stackoverflow with num pixels
-func dfsOptimal(col int, row int, width int, height int, matrix []componentPixel,
-	background [3]uint32, component int) (int, [4]int) {
+func dfsChunk(col int, row int, width int, height int, matrix []componentPixel,
+	background [3]uint32, component int, top, bottom, left, right int) (int, [4]int) {
 	stack := [][2]int{{col, row}}
 	var col_row [2]int
 
@@ -48,7 +54,8 @@ func dfsOptimal(col int, row int, width int, height int, matrix []componentPixel
 		col = col_row[0]
 		row = col_row[1]
 
-		if col >= width || col < 0 || row >= height || row < 0 {
+		if row < top || row >= bottom || col < left || col >= right {
+			// if col >= width || col < 0 || row >= height || row < 0 {
 			continue
 		}
 
@@ -109,32 +116,76 @@ func dfsOptimal(col int, row int, width int, height int, matrix []componentPixel
 	return count, pixelSpace
 }
 
-type chunkArea struct {
-	dimensions [4]int
-	pixels     int
-}
-
-func findIconInChunk(componentInx int,
+func findIconInChunk(componentInx *uint64,
 	startRow int, startCol int, endRow int, endCol int, width int, height int,
 	matrix []componentPixel, background [3]uint32) map[int]chunkArea {
 
 	componentDimensionMap := make(map[int]chunkArea)
+	reuseComponent := false
+	var currComponent int
 
 	for j := startRow; j < endRow; j++ {
 		for i := startCol; i < endCol; i++ {
-			componentPixelCount, dimensions := dfsOptimal(i, j, width, height, matrix,
-				background, componentInx)
+			if !reuseComponent {
+				// get a unique inx amongst all chunks
+				// only if we actually had a unique component last time
+				currComponent = int(atomic.AddUint64(componentInx, 1))
+			}
+
+			componentPixelCount, dimensions := dfsChunk(i, j, width, height, matrix,
+				background, currComponent, startRow, endRow, startCol, endCol)
 			if componentPixelCount > 0 {
-				componentDimensionMap[componentInx] = chunkArea{
+				// potential icon
+				componentDimensionMap[currComponent] = chunkArea{
 					dimensions: dimensions,
 					pixels:     componentPixelCount,
 				}
-				componentInx += 1
+				reuseComponent = false
+			} else {
+				reuseComponent = true
 			}
 		}
 	}
 
 	return componentDimensionMap
+}
+
+func mergeOnEitherSideByRow(matrix []componentPixel, background [3]uint32, unionFindArray *UnionFind, row, width int) {
+	for col := 0; col < width; col++ {
+		lowerPixelComponent := matrix[row*width+col].component
+		upperPixelComponent := matrix[(row-1)*width+col].component
+		if lowerPixelComponent > 0 {
+			if upperPixelComponent > 0 {
+				// these components should merge
+				unionFindArray.Union(upperPixelComponent, lowerPixelComponent)
+			} else if col != width-1 {
+				// check upper diagonal
+				upperDiagonalPixelComponent := matrix[(row-1)*width+(col+1)].component
+				if upperDiagonalPixelComponent > 0 {
+					unionFindArray.Union(upperDiagonalPixelComponent, lowerPixelComponent)
+				}
+			}
+		}
+	}
+}
+
+func mergeOnEitherSideByCol(matrix []componentPixel, background [3]uint32, unionFindArray *UnionFind, col, height, width int) {
+	for row := 0; row < height; row++ {
+		rightPixelComponent := matrix[row*width+col].component
+		leftPixelComponent := matrix[row*width+(col-1)].component
+		if rightPixelComponent > 0 {
+			if leftPixelComponent > 0 {
+				// these components should merge
+				unionFindArray.Union(rightPixelComponent, leftPixelComponent)
+			} else if row != height-1 {
+				// check upper diagonal
+				leftDiagonalPixelComponent := matrix[(row+1)*width+(col-1)].component
+				if leftDiagonalPixelComponent > 0 {
+					unionFindArray.Union(leftDiagonalPixelComponent, rightPixelComponent)
+				}
+			}
+		}
+	}
 }
 
 // findIcon takes an image and searches for the connected components
@@ -149,29 +200,84 @@ func findIconOptimal(width int, height int, matrix []componentPixel,
 	       * save space by only grabbing the required height/width instead of entire image
 	*/
 
-	chunks := 4
+	// use perfect square int chunks
+	chunks := 36
 	// want same number of chunks in the height and width
 	chunkRows := int(math.Sqrt(float64(chunks)))
 	chunkRowSize := height / chunkRows
 	chunkColSize := width / chunkRows
 
-	// TODO: figure out out to make unique component ids without coordination between chunks/threads
-	// some thread-safe hash generator or something?
+	// will serve as atomic thread-safe counter to avoid component inx collisions
+	var componentNum uint64 = 0
+
+	chunkComponentDimensions := make([]map[int]chunkArea, chunks)
+	currChunk := 0
 
 	for row := 0; row < chunkRows; row++ {
+		endRow := (row + 1) * chunkRowSize
+		if row == chunkRows-1 && endRow != height {
+			// chunks might not have been evenly distributed
+			endRow = height
+		}
 		for col := 0; col < chunkRows; col++ {
 			// each chunk updates the matrix in place
-			chunkComponents := findIconInChunk(1, row*chunkRowSize, col*chunkColSize,
-				(row+1)*chunkRowSize, (col+1)*chunkColSize, width, height, matrix, background)
+			endCol := (col + 1) * chunkColSize
+			if col == chunkRows-1 && endCol != width {
+				// chunk columns weren't even
+				endCol = width
+			}
+
+			// TODO: use a channel instead for goroutine
+			chunkComponentDimensions[currChunk] = findIconInChunk(&componentNum, row*chunkRowSize, col*chunkColSize,
+				endRow, endCol, width, height, matrix, background)
+			currChunk++
 		}
 	}
 
+	// merge chunks together
+	// run union find on the merge chunks
+	// run through the intersections of the chunks only (ignore edges of picture as there's no intersections)
+	unionFindParents := NewUnionFind(int(componentNum), chunks, chunkComponentDimensions)
+
+	// merge chunks by the intersections
+	// ignore the outsides of the image because they won't have any merging
+	for rowIntersection := 1; rowIntersection < chunkRows; rowIntersection++ {
+		mergeOnEitherSideByRow(matrix, background, unionFindParents, rowIntersection*chunkRowSize, width)
+	}
+
+	for colIntersection := 1; colIntersection < chunkRows; colIntersection++ {
+		mergeOnEitherSideByCol(matrix, background, unionFindParents, colIntersection*chunkColSize, height, width)
+	}
+
+	maxComponentInx := 0
+	maxComponentPixelCount := 0
+
 	// when two icon components merge, the entire icon dimensions need to merge
 	var maxComponentDimensions [4]int
-	// this will "group" icons from different chunks
-	// when they merge together
-	// so we don't have to rewrite each pixels' component number
+
+	// start at 1, component 0 is reserved and unused
+	for i := 1; i < len(unionFindParents.root); i++ {
+		unionFindParent := unionFindParents.Root(i)
+		if unionFindParent != nil && unionFindParent.totalPixels > maxComponentPixelCount {
+			maxComponentInx = i
+			maxComponentPixelCount = unionFindParent.totalPixels
+			maxComponentDimensions = unionFindParent.totalDimensions
+		}
+	}
+
+	// group chunk components together after merge for final component check
+	// eg chunk1 had component65 that merged with chunk2's component800
+	// the result icon's component hashset is {65, 800}
 	maxComponentSet := make(map[int]bool)
+	maxComponentSet[maxComponentInx] = true
+
+	for i := 1; i < len(unionFindParents.root); i++ {
+		if unionFindParents.Connected(i, maxComponentInx) {
+			// if unionFindParents.root[i].parent == &maxUnionParent {
+			// this component belongs to the maximum icon's set
+			maxComponentSet[i] = true
+		}
+	}
 
 	return maxComponentDimensions, maxComponentSet
 }

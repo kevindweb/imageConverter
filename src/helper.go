@@ -30,6 +30,17 @@ func readFile(fileToConvert string) image.Image {
 	return img
 }
 
+func readPngFile(fileToRead string) *image.NRGBA {
+	file, err := os.Open("../icons/" + fileToRead + ".png")
+	check(err)
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	check(err)
+
+	return img.(*image.NRGBA)
+}
+
 // writeFile ouputs an image.RGBA to png file on disk in ./icons
 func writeFile(fileName string, background *image.RGBA) {
 	buf := new(bytes.Buffer)
@@ -61,6 +72,12 @@ func colorDiff(c1 color.Color, background [3]uint32) float64 {
 	r1, g1, b1, _ := c1.RGBA()
 	return math.Sqrt(square(background[0]-r1) +
 		square(background[1]-g1) + square(background[2]-b1))
+}
+
+func colorCompare(c1, c2 color.Color) bool {
+	r1, g1, b1, _ := c1.RGBA()
+	r2, g2, b2, _ := c2.RGBA()
+	return r1 == r2 && g1 == g2 && b1 == b2
 }
 
 const MaxInt = int(^uint(0) >> 1)
