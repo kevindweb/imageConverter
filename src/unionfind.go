@@ -1,14 +1,14 @@
 package main
 
-type UnionFindItem struct {
-	parent          *UnionFindItem
-	size            int
+type UnionFindArea struct {
 	totalPixels     int
 	totalDimensions [4]int
 }
 
 type UnionFind struct {
-	root []*UnionFindItem
+	root []int
+	size []int
+	area []UnionFindArea
 }
 
 // New returns an initialized list of size
@@ -16,21 +16,21 @@ func NewUnionFind(components, chunks int, chunkComponentDimensions []map[int]chu
 	return new(UnionFind).init(components, chunks, chunkComponentDimensions)
 }
 
-// Constructor initializes root and size arrays
 func (uf *UnionFind) init(componentNum int, chunks int, chunkComponentDimensions []map[int]chunkArea) *UnionFind {
-	uf = new(UnionFind)
-	uf.root = make([]*UnionFindItem, componentNum)
+	uf.root = make([]int, componentNum)
+	uf.size = make([]int, componentNum)
+	uf.area = make([]UnionFindArea, componentNum)
 
 	for chunk := 0; chunk < chunks; chunk++ {
 		for k, v := range chunkComponentDimensions[chunk] {
-			item := UnionFindItem{
+			item := UnionFindArea{
 				totalPixels:     v.pixels,
 				totalDimensions: v.dimensions,
-				size:            1,
 			}
-			item.parent = &item
 
-			uf.root[k] = &item
+			uf.root[k] = k
+			uf.size[k] = 1
+			uf.area[k] = item
 		}
 	}
 
@@ -60,66 +60,67 @@ func mergeDimensions(dimension1, dimension2 [4]int) [4]int {
 	}
 }
 
+// Union/merge smaller area into larger area
+func (uf *UnionFind) mergeInto(larger int, smaller int) {
+	rootLarge := uf.root[larger]
+	rootSmall := uf.root[smaller]
+
+	largeArea := uf.area[rootLarge]
+	smallArea := uf.area[rootSmall]
+
+	largeArea.totalDimensions = mergeDimensions(largeArea.totalDimensions, smallArea.totalDimensions)
+	largeArea.totalPixels += smallArea.totalPixels
+	uf.area[rootLarge] = largeArea
+}
+
 // Union connects p and q by finding their roots and comparing their respective
 // size arrays to keep the tree flat
 func (uf *UnionFind) Union(p int, q int) {
 	qRoot := uf.Root(q)
 	pRoot := uf.Root(p)
 
-	if qRoot.parent == pRoot.parent {
+	if qRoot == pRoot {
 		return
 	}
 
-	if qRoot.size < pRoot.size {
-		qRoot.parent = pRoot.parent
-		pRoot.size += qRoot.size
-		pRoot.parent.totalPixels += qRoot.totalPixels
-		pRoot.parent.totalDimensions = mergeDimensions(pRoot.totalDimensions, qRoot.totalDimensions)
-		pRoot.totalDimensions = pRoot.parent.totalDimensions
-		pRoot.totalPixels = pRoot.parent.totalPixels
-		pRoot.parent.size = pRoot.size
+	if uf.size[qRoot] < uf.size[pRoot] {
+		uf.mergeInto(pRoot, qRoot)
+		uf.root[qRoot] = uf.root[pRoot]
+		uf.size[pRoot] += uf.size[qRoot]
 	} else {
-		pRoot.parent = qRoot.parent
-		qRoot.size += pRoot.size
-		qRoot.parent.totalPixels += pRoot.totalPixels
-		qRoot.parent.totalDimensions = mergeDimensions(pRoot.totalDimensions, qRoot.totalDimensions)
-		qRoot.totalDimensions = qRoot.parent.totalDimensions
-		qRoot.totalPixels = qRoot.parent.totalPixels
-		qRoot.parent.size = qRoot.size
+		uf.mergeInto(qRoot, pRoot)
+		uf.root[pRoot] = uf.root[qRoot]
+		uf.size[qRoot] += uf.size[pRoot]
 	}
 }
 
 // Root or Find traverses each parent element while compressing the
 // levels to find the root element of p
 // If we attempt to access an element outside the array it returns -1
-func (uf *UnionFind) Root(p int) *UnionFindItem {
-	item := uf.root[p]
-	if item == nil {
-		return nil
+func (uf *UnionFind) Root(p int) int {
+	if p > len(uf.root)-1 {
+		return -1
 	}
 
-	for *item != *item.parent {
-		item.parent = item.parent.parent
-		*item = *item.parent
+	for uf.root[p] != p {
+		uf.root[p] = uf.root[uf.root[p]]
+		p = uf.root[p]
 	}
 
-	return item
+	return p
 }
 
 // Root or Find
-func (uf *UnionFind) Find(p int) *UnionFindItem {
+func (uf *UnionFind) Find(p int) int {
 	return uf.Root(p)
 }
 
+// Get the details of the component's root
+func (uf *UnionFind) FindArea(p int) UnionFindArea {
+	return uf.area[uf.Root(p)]
+}
+
 // Check if items p,q are connected
-func (uf *UnionFind) Connected(p, q int) bool {
-	pRoot := uf.Root(p)
-	if pRoot == nil {
-		return false
-	}
-	qRoot := uf.Root(q)
-	if qRoot == nil {
-		return false
-	}
-	return pRoot.parent == qRoot.parent
+func (uf *UnionFind) Connected(p int, q int) bool {
+	return uf.Root(p) == uf.Root(q)
 }
