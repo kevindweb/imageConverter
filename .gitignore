@@ -1,0 +1,10 @@
+.vscode
+
+# build and test results
+*.prof
+src/src
+*.test
+*.out
+
+# mac os files
+*.icloud
