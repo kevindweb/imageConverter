@@ -15,11 +15,11 @@ And turn it into an icon with a transparent background like this
 
 
 ## Running the program
-* Install golang and execute `go build && ./main`
+* Install golang and execute `cd src && go build && ./src`
     * The default image is "clownfish" 
-    * You can run another in the images folder with `go run converter.go <image name>`
-        * Example: `go run converter.go cloudformation`
-        * The output will go into "icons"
+    * You can run another in the images folder with `./src <image-name>`
+        * Example: `./src cloudformation` (ignore the file type)
+        * The output will go into the "icons" directory
 
 ## Key algorithms
 * Find background color - O(n) image lookup with hash table for the color:pixelCount
@@ -39,9 +39,11 @@ And turn it into an icon with a transparent background like this
 ## Large JPEG Optimizations
 Some images can be quite large, eg >20mb - the initial algorithm does no optimizations. There is another optimized version (run with a `chunk` parameter to `runIcon` if a speedup is required)
 
-*Multithreaded connected component labeling*
+**Multithreaded connected component labeling**
+
 Inspiration for this came from the following examples:
 https://github.com/bonej-org/BoneJ2/blob/da5aa63cdc15516605e8dcb77458eb34b0f00b85/Legacy/bonej/src/main/java/org/bonej/plugins/ConnectedComponents.java#L540
+
 https://github.com/opencv/opencv/issues/7270
 
 The divide, conquer, and merge process goes as follows
@@ -55,7 +57,8 @@ The divide, conquer, and merge process goes as follows
 5. Add all adjacent components to a hashset `iconComponentMap`
 6. Check if pixel's component is in the hashset, if it is, add to output png, else make that pixel transparent
 
-*Data Structure*
+**Data Structure**
+
 The main part of this algorithm is using the Union-Find (disjoint set) to group the chunks
 
 Why is this necessary
