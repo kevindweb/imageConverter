@@ -1,0 +1,4 @@
+25 took 16.69 seconds
+49 took 13.7 seconds
+64 took 13.59
+81 took 14 s - upper bound reached

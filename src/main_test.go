@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func TestGetVal(t *testing.T) {
+func TestClownFish(t *testing.T) {
 	img := readFile("clownfish")
 	compareImg := readPngFile("clownfishReal")
 	compareHeight := compareImg.Rect.Dy()
 	compareWidth := compareImg.Rect.Dx()
 	for i := 0; i < 1; i++ {
-		res := runIconOptimal(img)
+		res := runIconOptimal(img, 36)
 
 		width := res.Rect.Bounds().Dx()
 		height := res.Rect.Bounds().Dy()
@@ -35,3 +35,27 @@ func TestGetVal(t *testing.T) {
 // 		runIcon(img)
 // 	}
 // }
+
+func TestLargePhoto(t *testing.T) {
+	img := readFile("clownfish")
+	compareImg := readPngFile("clownfishReal")
+	compareHeight := compareImg.Rect.Dy()
+	compareWidth := compareImg.Rect.Dx()
+	for i := 0; i < 1; i++ {
+		res := runIconOptimal(img, 36)
+
+		width := res.Rect.Bounds().Dx()
+		height := res.Rect.Bounds().Dy()
+		if width != compareWidth || height != compareHeight {
+			t.Fatalf("Width/Height not the same \nold: %dx%d \nnew: %dx%d\n", compareWidth, compareHeight, width, height)
+		}
+
+		for j := 0; j < height; j++ {
+			for i := 0; i < width; i++ {
+				if !colorCompare(res.At(i, j), compareImg.At(i, j)) {
+					t.Fatalf("Colors are off at pixel %d,%d", i, j)
+				}
+			}
+		}
+	}
+}

@@ -118,7 +118,7 @@ func dfsChunk(col int, row int, width int, height int, matrix []componentPixel,
 
 func findIconInChunk(componentInx *uint64,
 	startRow int, startCol int, endRow int, endCol int, width int, height int,
-	matrix []componentPixel, background [3]uint32) map[int]chunkArea {
+	matrix []componentPixel, background [3]uint32, channel chan map[int]chunkArea) {
 
 	componentDimensionMap := make(map[int]chunkArea)
 	reuseComponent := false
@@ -147,7 +147,7 @@ func findIconInChunk(componentInx *uint64,
 		}
 	}
 
-	return componentDimensionMap
+	channel <- componentDimensionMap
 }
 
 func mergeOnEitherSideByRow(matrix []componentPixel, background [3]uint32, unionFindArray *UnionFind, row, width int) {
@@ -191,7 +191,7 @@ func mergeOnEitherSideByCol(matrix []componentPixel, background [3]uint32, union
 // findIcon takes an image and searches for the connected components
 // it then returns the component (and dimensions) with maximum pixel count
 func findIconOptimal(width int, height int, matrix []componentPixel,
-	background [3]uint32) ([4]int, map[int]bool) {
+	background [3]uint32, chunks int) ([4]int, map[int]bool) {
 	/*
 	   * split the image into equal size chunks
 	   * in each chunk, find the connected components
@@ -200,8 +200,6 @@ func findIconOptimal(width int, height int, matrix []componentPixel,
 	       * save space by only grabbing the required height/width instead of entire image
 	*/
 
-	// use perfect square int chunks
-	chunks := 36
 	// want same number of chunks in the height and width
 	chunkRows := int(math.Sqrt(float64(chunks)))
 	chunkRowSize := height / chunkRows
@@ -211,7 +209,8 @@ func findIconOptimal(width int, height int, matrix []componentPixel,
 	var componentNum uint64 = 0
 
 	chunkComponentDimensions := make([]map[int]chunkArea, chunks)
-	currChunk := 0
+
+	c1 := make(chan map[int]chunkArea)
 
 	for row := 0; row < chunkRows; row++ {
 		endRow := (row + 1) * chunkRowSize
@@ -227,11 +226,14 @@ func findIconOptimal(width int, height int, matrix []componentPixel,
 				endCol = width
 			}
 
-			// TODO: use a channel instead for goroutine
-			chunkComponentDimensions[currChunk] = findIconInChunk(&componentNum, row*chunkRowSize, col*chunkColSize,
-				endRow, endCol, width, height, matrix, background)
-			currChunk++
+			go findIconInChunk(&componentNum, row*chunkRowSize, col*chunkColSize,
+				endRow, endCol, width, height, matrix, background, c1)
 		}
+	}
+
+	for chunk := 0; chunk < chunks; chunk++ {
+		data := <-c1
+		chunkComponentDimensions[chunk] = data
 	}
 
 	// merge chunks together
@@ -285,13 +287,13 @@ func findIconOptimal(width int, height int, matrix []componentPixel,
 // runIcon is the main entrypoint into the algorithm
 // when given an image, it finds the background, components
 // and returns the transparent png result
-func runIconOptimal(img image.Image) *image.RGBA {
+func runIconOptimal(img image.Image, chunks int) *image.RGBA {
 	backgroundWidth := img.Bounds().Dx()
 	backgroundHeight := img.Bounds().Dy()
 
 	backgroundColor, pixelMatrix := findBackgroundColor(img, backgroundWidth, backgroundHeight)
 	iconDimensions, iconComponentMap := findIconOptimal(backgroundWidth,
-		backgroundHeight, pixelMatrix, backgroundColor)
+		backgroundHeight, pixelMatrix, backgroundColor, chunks)
 
 	return buildTransparentImage(pixelMatrix, iconDimensions, iconComponentMap, backgroundWidth)
 }

@@ -12,13 +12,13 @@ func init() {
 
 func main() {
 	defer elapsed("imageConverter")()
-	fileName := "clownfish"
+	fileName := "sateliteLarge"
 	if len(os.Args) >= 2 {
 		fileName = os.Args[1]
 	}
 
 	img := readFile(fileName)
 	// background := runIcon(img)
-	background := runIconOptimal(img)
+	background := runIconOptimal(img, 64)
 	writeFile(fileName, background)
 }
