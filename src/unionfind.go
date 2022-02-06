@@ -1,5 +1,7 @@
 package main
 
+// Code referenced from https://github.com/theodesp/unionfind/blob/master/unionfind.go
+
 type UnionFindArea struct {
 	totalPixels     int
 	totalDimensions [4]int

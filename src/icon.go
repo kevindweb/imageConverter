@@ -125,42 +125,6 @@ func dfs(col int, row int, width int, height int, matrix []componentPixel,
 	return count, pixelSpace
 }
 
-// findIcon takes an image and searches for the connected components
-// it then returns the component (and dimensions) with maximum pixel count
-func findIcon(width int, height int, matrix []componentPixel,
-	background [3]uint32) ([4]int, map[int]bool) {
-	/*
-		 * find connected components
-		 	* connected components are surrounded by "background" color
-			* which separates them from other components
-		 * find connected component with highest numPixels
-		 * trim the image into only the icon's dimensions to save space
-	*/
-
-	components := 1
-	maxComponent := 1
-	maxComponentPixelCount := 0
-	var componentDimensions [][4]int
-
-	for j := 0; j < height; j++ {
-		for i := 0; i < width; i++ {
-			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
-				background, components, 0, height, 0, width)
-			if componentPixelCount > 0 {
-				if componentPixelCount > maxComponentPixelCount {
-					maxComponentPixelCount = componentPixelCount
-					maxComponent = components
-				}
-
-				componentDimensions = append(componentDimensions, dimensions)
-				components += 1
-			}
-		}
-	}
-
-	return componentDimensions[maxComponent-1], map[int]bool{maxComponent: true}
-}
-
 func buildTransparentImage(matrix []componentPixel, iconDimensions [4]int,
 	iconComponents map[int]bool, backgroundWidth int) *image.RGBA {
 
@@ -336,7 +300,6 @@ func handleChunkMerge(componentNum, chunks, chunkRows, chunkRowSize, chunkColSiz
 
 	for i := 1; i < len(unionFindParents.root); i++ {
 		if unionFindParents.Connected(i, maxComponentInx) {
-			// if unionFindParents.root[i].parent == &maxUnionParent {
 			// this component belongs to the maximum icon's set
 			maxComponentSet[i] = true
 		}
@@ -440,6 +403,42 @@ func findIconChunkThread(width int, height int, matrix []componentPixel,
 	}
 
 	return handleChunkMerge(int(componentNum), chunks, chunkRows, chunkRowSize, chunkColSize, width, height, chunkComponentDimensions, matrix, background)
+}
+
+// findIcon takes an image and searches for the connected components
+// it then returns the component (and dimensions) with maximum pixel count
+func findIcon(width int, height int, matrix []componentPixel,
+	background [3]uint32) ([4]int, map[int]bool) {
+	/*
+		 * find connected components
+		 	* connected components are surrounded by "background" color
+			* which separates them from other components
+		 * find connected component with highest numPixels
+		 * trim the image into only the icon's dimensions to save space
+	*/
+
+	components := 1
+	maxComponent := 1
+	maxComponentPixelCount := 0
+	var componentDimensions [][4]int
+
+	for j := 0; j < height; j++ {
+		for i := 0; i < width; i++ {
+			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
+				background, components, 0, height, 0, width)
+			if componentPixelCount > 0 {
+				if componentPixelCount > maxComponentPixelCount {
+					maxComponentPixelCount = componentPixelCount
+					maxComponent = components
+				}
+
+				componentDimensions = append(componentDimensions, dimensions)
+				components += 1
+			}
+		}
+	}
+
+	return componentDimensions[maxComponent-1], map[int]bool{maxComponent: true}
 }
 
 // runIcon is the main entrypoint into the algorithm
