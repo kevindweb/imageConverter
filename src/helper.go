@@ -6,7 +6,6 @@ import (
 	"image"
 	"image/color"
 	"image/png"
-	"io/ioutil"
 	"math"
 	"os"
 	"time"
@@ -44,10 +43,13 @@ func readPngFile(fileToRead string) *image.NRGBA {
 // writeFile ouputs an image.RGBA to png file on disk in ./icons
 func writeFile(fileName string, background *image.RGBA) {
 	buf := new(bytes.Buffer)
-	err := png.Encode(buf, background)
+	enc := &png.Encoder{
+		CompressionLevel: png.NoCompression,
+	}
+	err := enc.Encode(buf, background)
 	check(err)
 
-	err = ioutil.WriteFile("../icons/"+fileName+".png", buf.Bytes(), 0644)
+	err = os.WriteFile("../icons/"+fileName+".png", buf.Bytes(), 0644)
 	check(err)
 }
 

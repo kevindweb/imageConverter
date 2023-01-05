@@ -5,6 +5,7 @@
 src/src
 *.test
 *.out
+dist
 
 # mac os files
 *.icloud

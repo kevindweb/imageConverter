@@ -10,7 +10,7 @@ func TestClownFish(t *testing.T) {
 	compareHeight := compareImg.Rect.Dy()
 	compareWidth := compareImg.Rect.Dx()
 	for i := 0; i < 1; i++ {
-		res := runIcon(img, 64, true)
+		res := runIcon(img, 64, false)
 
 		width := res.Rect.Bounds().Dx()
 		height := res.Rect.Bounds().Dy()
@@ -28,9 +28,10 @@ func TestClownFish(t *testing.T) {
 	}
 }
 
-func BechmarkIcon(b *testing.B) {
+func BenchmarkIcon(b *testing.B) {
 	img := readFile("clownfish")
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		runIcon(img, 0, false)
+		runIcon(img, 64, true)
 	}
 }
