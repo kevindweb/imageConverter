@@ -1,4 +1,4 @@
-package main
+package transparency
 
 import (
 	"image"
@@ -45,7 +45,7 @@ func findBackgroundColor(img image.Image, width int, height int) ([3]uint32, []c
 
 // dfs iteratively adds neighbors to the component list to find the entire
 // connected icon - can't use recursive, causes stackoverflow with num pixels
-func dfs(col int, row int, width int, height int, matrix []componentPixel,
+func dfs(col int, row int, width int, matrix []componentPixel,
 	background [3]uint32, component int, top, bottom, left, right int) (int, [4]int) {
 	stack := [][2]int{{col, row}}
 	var col_row [2]int
@@ -155,7 +155,7 @@ func buildTransparentImage(matrix []componentPixel, iconDimensions [4]int,
 }
 
 func findIconInChunkThreaded(componentInx *uint64,
-	startRow int, startCol int, endRow int, endCol int, width int, height int,
+	startRow int, startCol int, endRow int, endCol int, width int,
 	matrix []componentPixel, background [3]uint32, channel chan map[int]chunkArea) {
 
 	componentDimensionMap := make(map[int]chunkArea)
@@ -170,7 +170,7 @@ func findIconInChunkThreaded(componentInx *uint64,
 				currComponent = int(atomic.AddUint64(componentInx, 1))
 			}
 
-			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
+			componentPixelCount, dimensions := dfs(i, j, width, matrix,
 				background, currComponent, startRow, endRow, startCol, endCol)
 			if componentPixelCount > 0 {
 				// potential icon
@@ -189,7 +189,7 @@ func findIconInChunkThreaded(componentInx *uint64,
 }
 
 func findIconInChunk(componentInx *uint64,
-	startRow int, startCol int, endRow int, endCol int, width int, height int,
+	startRow int, startCol int, endRow int, endCol int, width int,
 	matrix []componentPixel, background [3]uint32) map[int]chunkArea {
 
 	componentDimensionMap := make(map[int]chunkArea)
@@ -204,7 +204,7 @@ func findIconInChunk(componentInx *uint64,
 				currComponent = int(atomic.AddUint64(componentInx, 1))
 			}
 
-			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
+			componentPixelCount, dimensions := dfs(i, j, width, matrix,
 				background, currComponent, startRow, endRow, startCol, endCol)
 			if componentPixelCount > 0 {
 				// potential icon
@@ -222,7 +222,7 @@ func findIconInChunk(componentInx *uint64,
 	return componentDimensionMap
 }
 
-func mergeOnEitherSideByRow(matrix []componentPixel, background [3]uint32, unionFindArray *UnionFind, row, width int) {
+func mergeOnEitherSideByRow(matrix []componentPixel, unionFindArray *UnionFind, row, width int) {
 	for col := 0; col < width; col++ {
 		lowerPixelComponent := matrix[row*width+col].component
 		upperPixelComponent := matrix[(row-1)*width+col].component
@@ -241,7 +241,11 @@ func mergeOnEitherSideByRow(matrix []componentPixel, background [3]uint32, union
 	}
 }
 
-func mergeOnEitherSideByCol(matrix []componentPixel, background [3]uint32, unionFindArray *UnionFind, col, height, width int) {
+func mergeOnEitherSideByCol(
+	matrix []componentPixel,
+	unionFindArray *UnionFind,
+	col, height, width int,
+) {
 	for row := 0; row < height; row++ {
 		rightPixelComponent := matrix[row*width+col].component
 		leftPixelComponent := matrix[row*width+(col-1)].component
@@ -260,7 +264,11 @@ func mergeOnEitherSideByCol(matrix []componentPixel, background [3]uint32, union
 	}
 }
 
-func handleChunkMerge(componentNum, chunks, chunkRows, chunkRowSize, chunkColSize, width, height int, chunkComponentDimensions []map[int]chunkArea, matrix []componentPixel, background [3]uint32) ([4]int, map[int]bool) {
+func handleChunkMerge(
+	componentNum, chunks, chunkRows, chunkRowSize, chunkColSize, width, height int,
+	chunkComponentDimensions []map[int]chunkArea,
+	matrix []componentPixel,
+) ([4]int, map[int]bool) {
 	// merge chunks together
 	// run union find on the merge chunks
 	// run through the intersections of the chunks only (ignore edges of picture as there's no intersections)
@@ -269,11 +277,22 @@ func handleChunkMerge(componentNum, chunks, chunkRows, chunkRowSize, chunkColSiz
 	// merge chunks by the intersections
 	// ignore the outsides of the image because they won't have any merging
 	for rowIntersection := 1; rowIntersection < chunkRows; rowIntersection++ {
-		mergeOnEitherSideByRow(matrix, background, unionFindParents, rowIntersection*chunkRowSize, width)
+		mergeOnEitherSideByRow(
+			matrix,
+			unionFindParents,
+			rowIntersection*chunkRowSize,
+			width,
+		)
 	}
 
 	for colIntersection := 1; colIntersection < chunkRows; colIntersection++ {
-		mergeOnEitherSideByCol(matrix, background, unionFindParents, colIntersection*chunkColSize, height, width)
+		mergeOnEitherSideByCol(
+			matrix,
+			unionFindParents,
+			colIntersection*chunkColSize,
+			height,
+			width,
+		)
 	}
 
 	maxComponentInx := 0
@@ -346,13 +365,31 @@ func findIconChunk(width int, height int, matrix []componentPixel,
 				endCol = width
 			}
 
-			chunkComponentDimensions[chunk] = findIconInChunk(&componentNum, row*chunkRowSize, col*chunkColSize,
-				endRow, endCol, width, height, matrix, background)
+			chunkComponentDimensions[chunk] = findIconInChunk(
+				&componentNum,
+				row*chunkRowSize,
+				col*chunkColSize,
+				endRow,
+				endCol,
+				width,
+				matrix,
+				background,
+			)
 			chunk++
 		}
 	}
 
-	return handleChunkMerge(int(componentNum), chunks, chunkRows, chunkRowSize, chunkColSize, width, height, chunkComponentDimensions, matrix, background)
+	return handleChunkMerge(
+		int(componentNum),
+		chunks,
+		chunkRows,
+		chunkRowSize,
+		chunkColSize,
+		width,
+		height,
+		chunkComponentDimensions,
+		matrix,
+	)
 }
 
 // it then returns the component (and dimensions) with maximum pixel count
@@ -393,7 +430,7 @@ func findIconChunkThread(width int, height int, matrix []componentPixel,
 			}
 
 			go findIconInChunkThreaded(&componentNum, row*chunkRowSize, col*chunkColSize,
-				endRow, endCol, width, height, matrix, background, c1)
+				endRow, endCol, width, matrix, background, c1)
 		}
 	}
 
@@ -402,7 +439,17 @@ func findIconChunkThread(width int, height int, matrix []componentPixel,
 		chunkComponentDimensions[chunk] = data
 	}
 
-	return handleChunkMerge(int(componentNum), chunks, chunkRows, chunkRowSize, chunkColSize, width, height, chunkComponentDimensions, matrix, background)
+	return handleChunkMerge(
+		int(componentNum),
+		chunks,
+		chunkRows,
+		chunkRowSize,
+		chunkColSize,
+		width,
+		height,
+		chunkComponentDimensions,
+		matrix,
+	)
 }
 
 // findIcon takes an image and searches for the connected components
@@ -424,7 +471,7 @@ func findIcon(width int, height int, matrix []componentPixel,
 
 	for j := 0; j < height; j++ {
 		for i := 0; i < width; i++ {
-			componentPixelCount, dimensions := dfs(i, j, width, height, matrix,
+			componentPixelCount, dimensions := dfs(i, j, width, matrix,
 				background, components, 0, height, 0, width)
 			if componentPixelCount > 0 {
 				if componentPixelCount > maxComponentPixelCount {
@@ -441,10 +488,10 @@ func findIcon(width int, height int, matrix []componentPixel,
 	return componentDimensions[maxComponent-1], map[int]bool{maxComponent: true}
 }
 
-// runIcon is the main entrypoint into the algorithm
+// RunIcon is the main entrypoint into the algorithm
 // when given an image, it finds the background, components
 // and returns the transparent png result
-func runIcon(img image.Image, chunks int, threaded bool) *image.RGBA {
+func RunIcon(img image.Image, chunks int, threaded bool) *image.RGBA {
 	backgroundWidth := img.Bounds().Dx()
 	backgroundHeight := img.Bounds().Dy()
 

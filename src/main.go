@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/jpeg"
+	"imageconverter/src/transparency"
 	"os"
 )
 
@@ -11,13 +12,13 @@ func init() {
 }
 
 func main() {
-	defer elapsed("imageConverter")()
+	defer transparency.Elapsed("imageConverter")()
 	fileName := "clownFish"
 	if len(os.Args) >= 2 {
 		fileName = os.Args[1]
 	}
 
-	img := readFile(fileName)
-	background := runIcon(img, 64, true)
-	writeFile(fileName, background)
+	img := transparency.ReadFile(fileName)
+	background := transparency.RunIcon(img, 64, true)
+	transparency.WriteFile(fileName, background)
 }

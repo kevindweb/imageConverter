@@ -1,4 +1,4 @@
-package main
+package transparency
 
 // Code referenced from https://github.com/theodesp/unionfind/blob/master/unionfind.go
 
@@ -18,7 +18,11 @@ func NewUnionFind(components, chunks int, chunkComponentDimensions []map[int]chu
 	return new(UnionFind).init(components, chunks, chunkComponentDimensions)
 }
 
-func (uf *UnionFind) init(componentNum int, chunks int, chunkComponentDimensions []map[int]chunkArea) *UnionFind {
+func (uf *UnionFind) init(
+	componentNum int,
+	chunks int,
+	chunkComponentDimensions []map[int]chunkArea,
+) *UnionFind {
 	uf.root = make([]int, componentNum)
 	uf.size = make([]int, componentNum)
 	uf.area = make([]UnionFindArea, componentNum)
@@ -70,7 +74,10 @@ func (uf *UnionFind) mergeInto(larger int, smaller int) {
 	largeArea := uf.area[rootLarge]
 	smallArea := uf.area[rootSmall]
 
-	largeArea.totalDimensions = mergeDimensions(largeArea.totalDimensions, smallArea.totalDimensions)
+	largeArea.totalDimensions = mergeDimensions(
+		largeArea.totalDimensions,
+		smallArea.totalDimensions,
+	)
 	largeArea.totalPixels += smallArea.totalPixels
 	uf.area[rootLarge] = largeArea
 }

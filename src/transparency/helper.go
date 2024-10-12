@@ -1,4 +1,4 @@
-package main
+package transparency
 
 import (
 	"bytes"
@@ -19,8 +19,8 @@ func check(e error) {
 	}
 }
 
-// readFile takes the input string and reads the image from ./images into memory
-func readFile(fileToConvert string) image.Image {
+// ReadFile takes the input string and reads the image from ./images into memory
+func ReadFile(fileToConvert string) image.Image {
 	file, err := os.Open("../images/" + fileToConvert + ".jpeg")
 	check(err)
 	defer file.Close()
@@ -30,7 +30,7 @@ func readFile(fileToConvert string) image.Image {
 	return img
 }
 
-func readPngFile(fileToRead string) *image.NRGBA {
+func ReadPngFile(fileToRead string) *image.NRGBA {
 	file, err := os.Open("../icons/" + fileToRead + ".png")
 	check(err)
 	defer file.Close()
@@ -41,8 +41,8 @@ func readPngFile(fileToRead string) *image.NRGBA {
 	return img.(*image.NRGBA)
 }
 
-// writeFile ouputs an image.RGBA to png file on disk in ./icons
-func writeFile(fileName string, background *image.RGBA) {
+// WriteFile ouputs an image.RGBA to png file on disk in ./icons
+func WriteFile(fileName string, background *image.RGBA) {
 	buf := new(bytes.Buffer)
 	err := png.Encode(buf, background)
 	check(err)
@@ -51,9 +51,9 @@ func writeFile(fileName string, background *image.RGBA) {
 	check(err)
 }
 
-// elapsed prints the function duration
-// to be used like: defer elapsed("what")()
-func elapsed(what string) func() {
+// Elapsed prints the function duration
+// usage: defer Elapsed("what")()
+func Elapsed(what string) func() {
 	start := time.Now()
 	return func() {
 		fmt.Printf("%s took %v\n", what, time.Since(start))
@@ -74,7 +74,7 @@ func colorDiff(c1 color.Color, background [3]uint32) float64 {
 		square(background[1]-g1) + square(background[2]-b1))
 }
 
-func colorCompare(c1, c2 color.Color) bool {
+func ColorCompare(c1, c2 color.Color) bool {
 	r1, g1, b1, _ := c1.RGBA()
 	r2, g2, b2, _ := c2.RGBA()
 	return r1 == r2 && g1 == g2 && b1 == b2
